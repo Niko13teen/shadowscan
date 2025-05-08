@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowScan</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --bg-darker: #050505;
+            --bg-card: #111111;
+            --accent: #ff3333;
+            --accent-hover: #ff5555;
+            --text-main: #e0e0e0;
+            --text-secondary: #888888;
+            --success: #00cc44;
+            --warning: #ffaa00;
+            --danger: #ff4444;
+            --border: #222222;
+            --border-light: #333333;
+            --glow: 0 0 12px rgba(255, 51, 51, 0.4);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+            background-color: var(--bg-dark);
+        }
+
+        .scan-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .scan-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .scan-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            text-shadow: 0 0 5px rgba(255, 51, 51, 0.7);
+        }
+
+        .scan-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            color: var(--accent);
+            text-shadow: 0 0 5px rgba(255, 51, 51, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .bg-particle {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
+            background: radial-gradient(circle, rgb(255, 0, 0) 0%, rgb(255, 0, 0) 70%);
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0;
+            }
+            20% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translate(var(--tx), var(--ty)) scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            flex: 1;
+            width: 100%;
+            transition: opacity 0.5s ease;
+        }
+
+        .container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            width: 100%;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: var(--transition);
+        }
+
+        .logo:hover {
+            transform: translateY(-2px);
+        }
+
+        .logo-icon {
+            color: var(--accent);
+            font-size: 2rem;
+            width: 32px;
+            height: 32px;
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.8rem;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text span {
+            color: var(--accent);
+            text-shadow: var(--glow);
+        }
+
+        .scan-time {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            padding: 0.5rem 0.8rem;
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .search-form {
+            background-color: var(--bg-card);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+        }
+
+        .search-form:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+            border-color: var(--border-light);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            width: 100%;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--bg-darker);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-size: 1rem;
+            transition: var(--transition);
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: var(--glow);
+        }
+
+        .submit-btn {
+            background-color: var(--accent);
+            color: black;
+            border: none;
+            padding: 1rem 2.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(255, 51, 51, 0.3);
+        }
+
+        .submit-btn:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--glow);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            width: 100%;
+        }
+
+        .stat-card {
+            background-color: var(--bg-card);
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+            width: 100%;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-title {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-shadow: var(--glow);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .section {
+            background-color: var(--bg-card);
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: var(--transition);
+        }
+
+        .section:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            margin-bottom: 1.75rem;
+            color: var(--text-main);
+            font-weight: 700;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.75rem;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title i {
+            color: var(--accent);
+        }
+
+        .domain-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        .info-item {
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        .info-label {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            word-break: break-word;
+            color: var(--text-main);
+            padding: 0.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        .data-table th {
+            text-align: left;
+            padding: 1.25rem;
+            background-color: var(--bg-darker);
+            color: var(--text-secondary);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .data-table td {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            gap: 0.5rem;
+        }
+
+        .status-alive {
+            background-color: rgba(0, 204, 68, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .status-dead {
+            background-color: rgba(255, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .finding-card {
+            background-color: var(--bg-darker);
+            padding: 1.75rem;
+            margin-bottom: 1.75rem;
+            border-left: 4px solid var(--accent);
+            border-radius: 4px;
+            width: 100%;
+            transition: var(--transition);
+        }
+
+        .finding-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        .finding-title {
+            font-weight: 500;
+            color: var(--accent);
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .finding-count {
+            background-color: var(--accent);
+            color: black;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+            border-radius: 20px;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .finding-item {
+            background-color: rgba(255, 255, 255, 0.03);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+            word-break: break-all;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            transition: var(--transition);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .finding-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-light);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .empty-state i {
+            font-size: 2rem;
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .icon {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .error-container {
+            border-left: 4px solid var(--danger);
+            background-color: rgba(255, 68, 68, 0.1);
+            padding: 1.25rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            border-radius: 0 4px 4px 0;
+        }
+
+        footer {
+            background-color: var(--bg-darker);
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            margin-top: 3rem;
+            width: 100%;
+            transition: opacity 0.5s ease;
+        }
+
+        footer.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .copyright {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .telegram-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.25rem;
+            border: 1px solid var(--accent);
+            transition: var(--transition);
+            font-size: 1rem;
+            border-radius: 4px;
+        }
+
+        .telegram-link:hover {
+            background-color: var(--accent);
+            color: black;
+            box-shadow: var(--glow);
+            transform: translateY(-2px);
+        }
+
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--bg-darker);
+            color: var(--text-main);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+            border: 1px solid var(--border);
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        [data-tooltip]:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-hover);
+        }
+
+        .ssl-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .ssl-expiry {
+            font-weight: bold;
+            margin-left: 0.5rem;
+        }
+
+        .ssl-valid {
+            color: var(--success);
+        }
+
+        .ssl-warning {
+            color: var(--warning);
+        }
+
+        .ssl-danger {
+            color: var(--danger);
+        }
+
+        .security-header-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .security-badge {
+            font-size: 0.8em;
+            margin-left: 0.5rem;
+        }
+
+        .security-header-item {
+            background-color: var(--bg-darker);
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .security-header-name {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .security-header-value {
+            font-size: 1rem;
+            word-break: break-word;
+        }
+
+        .contacts-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        .contact-list {
+            list-style: none;
+        }
+
+        .contact-item {
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            background-color: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .export-btn {
+            background-color: var(--accent);
+            color: black;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(255, 51, 51, 0.3);
+            margin-top: 1rem;
+        }
+
+        .export-btn:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--glow);
+        }
+
+.security-header-container {
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+
+.security-header-container.has-policy {
+    border-color: var(--success);
+}
+
+.security-header-item {
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.security-header-item.header-present {
+    border-color: var(--success);
+    background-color: rgba(0, 204, 68, 0.05);
+}
+
+.security-header-item.header-missing {
+    border-color: var(--warning);
+    background-color: rgba(255, 170, 0, 0.05);
+}
+
+.security-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+.present-badge {
+    background-color: var(--success);
+    color: white;
+}
+
+.missing-badge {
+    background-color: var(--warning);
+    color: black;
+}
+
+.security-header-analysis {
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-top: 1rem;
+}
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+            
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1.25rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .section {
+                padding: 1.5rem;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                gap: 1.25rem;
+                text-align: center;
+            }
+
+            .security-header-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .domain-info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section {
+                padding: 1.25rem;
+            }
+
+            .data-table th, 
+            .data-table td {
+                padding: 1rem 0.75rem;
+                font-size: 0.85rem;
+            }
+
+            .finding-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+        .scan-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .scan-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .scan-text {
+            font-size: 1.2rem;
+            color: var(--accent);
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation" id="bgAnimation"></div>
+
+    <div class="scan-overlay" id="scanOverlay">
+        <div class="loader"></div>
+        <div class="scan-text">Scanning target...</div>
+    </div>
+
+    <div class="container" id="mainContainer">
+        <header>
+            <div class="logo">
+                <i class="logo-icon fas fa-bug"></i>
+                <span class="logo-text">Shadow<span>Scan</span></span>
+            </div>
+            {% if results %}
+                <div class="scan-time" data-tooltip="Scan completion time">
+                    <i class="fas fa-clock"></i> {{ results.scan_time }}
+                </div>
+            {% endif %}
+        </header>
+
+        <form method="POST" class="search-form" id="searchForm">
+            <div class="form-group">
+                <label for="domain" class="form-label">
+                    <i class="fas fa-globe"></i> Target Domain
+                </label>
+                <input type="text" id="domain" name="domain" class="form-input" placeholder="example.com" required value="{{ results.domain if results else '' }}">
+            </div>
+            <button type="submit" class="submit-btn">
+                <i class="fas fa-search"></i> Analyze
+            </button>
+        </form>
+
+        {% if error %}
+            <div class="error-container">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ error }}
+            </div>
+        {% endif %}
+
+        {% if results %}
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title"><i class="fas fa-sitemap"></i> Subdomains</div>
+                <div class="stat-value">{{ results.subdomains_from_crt|length }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title"><i class="fas fa-heartbeat"></i> Alive</div>
+                <div class="stat-value">{{ results.subdomains_details|selectattr('alive')|list|length }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title"><i class="fab fa-js"></i> JS Files</div>
+                <div class="stat-value">{{ results.js_files|length }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title"><i class="fas fa-calendar-alt"></i> Domain Age</div>
+                <div class="stat-value">{{ results.domain_info.creation_date.split('-')[0] if results.domain_info.creation_date != 'Unknown' else '?' }}</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-info-circle"></i> Domain Information</h3>
+            <div class="domain-info-grid">
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-address-card"></i> Registrar</div>
+                    <div class="info-value">{{ results.domain_info.registrar }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-calendar-plus"></i> Creation Date</div>
+                    <div class="info-value">{{ results.domain_info.creation_date }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-calendar-times"></i> Expiration Date</div>
+                    <div class="info-value">{{ results.domain_info.expiration_date }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-calendar-check"></i> Updated Date</div>
+                    <div class="info-value">{{ results.domain_info.updated_date }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-power-off"></i> Status</div>
+                    <div class="info-value">{{ results.domain_info.status }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label"><i class="fas fa-server"></i> Name Servers</div>
+                    <div class="info-value">
+                        {% for ns in results.domain_info.name_servers %}
+                            {{ ns }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-lock"></i> SSL/TLS Certificate</h3>
+            {% if results.ssl_info and not results.ssl_info.error %}
+                <div class="ssl-info-grid">
+                    <div class="info-item">
+                        <div class="info-label"><i class="fas fa-certificate"></i> Issuer</div>
+                        <div class="info-value">{{ results.ssl_info.issuer or 'Unknown' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label"><i class="fas fa-calendar-day"></i> Valid From</div>
+                        <div class="info-value">{{ results.ssl_info.not_before|format_ssl_date or 'Unknown' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label"><i class="fas fa-calendar-times"></i> Expires</div>
+                        <div class="info-value">
+                            {{ results.ssl_info.not_after|format_ssl_date or 'Unknown' }}
+                            {% if results.ssl_info.expires_in_days %}
+                                <span class="ssl-expiry 
+                                    {% if results.ssl_info.expires_in_days > 30 %}ssl-valid
+                                    {% elif results.ssl_info.expires_in_days > 7 %}ssl-warning
+                                    {% else %}ssl-danger{% endif %}">
+                                    ({{ results.ssl_info.expires_in_days }} days)
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label"><i class="fas fa-code"></i> Algorithm</div>
+                        <div class="info-value">{{ results.ssl_info.signature_algorithm or 'Unknown' }}</div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    {% if results.ssl_info.error %}
+                        SSL Error: {{ results.ssl_info.error }}
+                    {% else %}
+                        SSL information not available
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+
+<div class="section">
+    <h3 class="section-title"><i class="fas fa-microchip"></i> Detected Technologies</h3>
+    {% if results.technologies %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+            {% for tech, details in results.technologies.items() %}
+                <div class="finding-card">
+                    <div class="finding-header">
+                        <div class="finding-title">
+                            <i class="fas fa-{{ 'wordpress' if tech == 'wordpress' else 'joomla' if tech == 'joomla' else 'code' }}"></i> 
+                            {{ tech|title }}
+                        </div>
+                        <div class="finding-count">{{ details|length }}</div>
+                    </div>
+                    {% for detail in details[:5] %}
+                        <div class="finding-item">
+                            <i class="fas fa-info-circle"></i> {{ detail|truncate(80) }}
+                        </div>
+                    {% endfor %}
+                    {% if details|length > 5 %}
+                        <div class="finding-item">
+                            <i class="fas fa-ellipsis-h"></i> and {{ details|length - 5 }} more...
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <i class="fas fa-question-circle"></i>
+            No technologies detected
+        </div>
+    {% endif %}
+</div>
+
+<div class="section">
+    <div class="security-header-container {% if results.subdomains_details and results.subdomains_details[0].get('has_security_policy', False) %}has-policy{% else %}no-policy{% endif %}">
+        <h3 class="section-title">
+            <i class="fas fa-shield-alt"></i> Security Headers 
+            {% if results.subdomains_details and results.subdomains_details[0].security_score is defined %}
+                (Score: {{ results.subdomains_details[0].security_score }}/100)
+            {% endif %}
+        </h3>
+        
+        {% if results.subdomains_details and results.subdomains_details[0].security_headers %}
+            <div class="security-header-grid">
+                {% for header, data in results.subdomains_details[0].security_headers.items() %}
+                    <div class="security-header-item {% if data.value != 'Not set' %}header-present{% else %}header-missing{% endif %}">
+                        <div class="security-header-name">
+                            <i class="fas fa-{{ 'check-circle' if data.value != 'Not set' else 'times-circle' }} 
+                                {{ 'text-success' if data.value != 'Not set' else 'text-danger' }}"></i>
+                            {{ header }}
+                            <span class="security-badge {% if data.value != 'Not set' %}present-badge{% else %}missing-badge{% endif %}">
+                                {{ 'Present' if data.value != 'Not set' else 'Missing' }}
+                            </span>
+                        </div>
+                        <div class="security-header-value">
+                            {% if data.value != 'Not set' %}
+                                <code>{{ data.value|truncate(100) }}</code>
+                            {% else %}
+                                <span class="text-danger">Not set</span>
+                            {% endif %}
+                        </div>
+                        <div class="security-header-desc">
+                            <small class="text-muted">{{ data.description }}</small>
+                        </div>
+                        {% if data.value != 'Not set' and data.get('analysis') %}
+                            <div class="security-header-analysis mt-2">
+                                {% if header == 'CSP' %}
+                                    <div class="csp-analysis">
+                                        <strong>Analysis:</strong>
+                                        <ul>
+                                            <li>Default-src: {{ '✔' if data.analysis.get('has_default_src') else '✖' }}</li>
+                                            <li>Script-src: {{ '✔' if data.analysis.get('has_script_src') else '✖' }}</li>
+                                            <li>Object-src: {{ '✔' if data.analysis.get('has_object_src') else '✖' }}</li>
+                                            <li>Frame-src: {{ '✔' if data.analysis.get('has_frame_src') else '✖' }}</li>
+                                            <li>Unsafe-inline: {{ '⚠' if data.analysis.get('unsafe_inline') else '✔' }}</li>
+                                            <li>Unsafe-eval: {{ '⚠' if data.analysis.get('unsafe_eval') else '✔' }}</li>
+                                            <li>Strict-dynamic: {{ '✔' if data.analysis.get('strict_dynamic') else '✖' }}</li>
+                                        </ul>
+                                    </div>
+                                {% elif header == 'HSTS' %}
+                                    <div class="hsts-analysis">
+                                        <strong>Analysis:</strong>
+                                        <ul>
+                                            <li>Max-age: {{ data.analysis.get('max_age', 0) }} seconds ({{ (data.analysis.get('max_age', 0) / 86400)|round(1) }} days)</li>
+                                            <li>IncludeSubDomains: {{ '✔' if data.analysis.get('include_subdomains') else '✖' }}</li>
+                                            <li>Preload: {{ '✔' if data.analysis.get('preload') else '✖' }}</li>
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div class="security-header-recommendation mt-2">
+                            <strong>Recommendation:</strong> {{ data.recommendation }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            {% if results.subdomains_details[0].get('vulnerable_headers') %}
+                <div class="mt-4">
+                    <h4><i class="fas fa-exclamation-triangle text-warning"></i> Potentially Vulnerable Headers</h4>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Header</th>
+                                    <th>Value</th>
+                                    <th>Risk</th>
+                                    <th>Recommendation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for header, value in results.subdomains_details[0].vulnerable_headers.items() %}
+                                    <tr>
+                                        <td>{{ header }}</td>
+                                        <td>{{ value }}</td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark">Medium</span>
+                                        </td>
+                                        <td>Remove or obfuscate this header to avoid information disclosure</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+            
+            {% if results.subdomains_details and results.subdomains_details[0].security_score is defined %}
+                <div class="mt-4">
+                    <h4><i class="fas fa-chart-pie"></i> Security Score Breakdown</h4>
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                            aria-valuenow="{{ results.subdomains_details[0].security_score }}" 
+                            aria-valuemin="0" aria-valuemax="100">
+                            {{ results.subdomains_details[0].security_score }}%
+                        </div>
+                    </div>
+                    <p>The security score is calculated based on the presence and configuration of security headers. Higher scores indicate better security configurations.</p>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                Security headers information not available
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-envelope"></i> Email Addresses Found</h3>
+            {% if results.contacts and results.contacts.emails %}
+                <div class="contacts-grid">
+                    <div>
+                        <ul class="contact-list">
+                            {% for email in results.contacts.emails %}
+                                <li class="contact-item">
+                                    <a href="mailto:{{ email }}" style="color: var(--accent);">{{ email }}</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-envelope"></i>
+                    No email addresses found in page content
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-robot"></i> Robots.txt & Sitemap.xml</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div>
+                    <h4><i class="fas fa-file-alt"></i> Robots.txt</h4>
+                    {% if results.robots_sitemap.robots.exists %}
+                        <pre style="margin-top: 1rem;">{{ results.robots_sitemap.robots.content|join('\n') }}</pre>
+                        {% if results.robots_sitemap.robots.sitemaps %}
+                            <div style="margin-top: 1rem;">
+                                <h5><i class="fas fa-sitemap"></i> Sitemaps Found:</h5>
+                                <ul style="margin-top: 0.5rem;">
+                                    {% for sitemap in results.robots_sitemap.robots.sitemaps %}
+                                        <li style="margin-bottom: 0.5rem;">
+                                            <a href="{{ sitemap }}" target="_blank" style="color: var(--accent);">{{ sitemap }}</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="empty-state" style="padding: 1rem;">
+                            <i class="fas fa-exclamation-circle"></i> robots.txt not found
+                        </div>
+                    {% endif %}
+                </div>
+                <div>
+                    <h4><i class="fas fa-sitemap"></i> Sitemap.xml</h4>
+                    {% if results.robots_sitemap.sitemap.exists %}
+                        <div style="margin-top: 1rem;">
+                            <p>Found {{ results.robots_sitemap.sitemap.url_count }} URLs in sitemap</p>
+                            {% if results.robots_sitemap.sitemap.sample_urls %}
+                                <h5 style="margin-top: 1rem;"><i class="fas fa-link"></i> Sample URLs:</h5>
+                                <ul style="margin-top: 0.5rem;">
+                                    {% for url in results.robots_sitemap.sitemap.sample_urls %}
+                                        <li style="margin-bottom: 0.5rem; word-break: break-all;">
+                                            <a href="{{ url }}" target="_blank" style="color: var(--accent);">{{ url }}</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state" style="padding: 1rem;">
+                            <i class="fas fa-exclamation-circle"></i> sitemap.xml not found
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-network-wired"></i> Subdomains ({{ results.subdomains_details|length }})</h3>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th><i class="fas fa-link"></i> Subdomain</th>
+                            <th><i class="fas fa-map-marker-alt"></i> IP Address</th>
+                            <th><i class="fas fa-heartbeat"></i> Status</th>
+                            <th><i class="fas fa-heading"></i> Title</th>
+                            <th><i class="fas fa-server"></i> Server</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subdomain in results.subdomains_details %}
+                            <tr>
+                                <td>{{ subdomain.subdomain }}</td>
+                                <td>{{ subdomain.ip or '-' }}</td>
+                                <td>
+                                    <span class="status-badge {{ 'status-alive' if subdomain.alive else 'status-dead' }}">
+                                        <i class="fas fa-{{ 'check-circle' if subdomain.alive else 'times-circle' }}"></i>
+                                        {{ 'Alive' if subdomain.alive else 'Dead' }}
+                                    </span>
+                                </td>
+                                <td>{{ subdomain.title }}</td>
+                                <td>{{ subdomain.server }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fab fa-js"></i> JavaScript Files ({{ results.js_files|length }})</h3>
+            {% if results.js_files %}
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; width: 100%;">
+                    {% for js_file in results.js_files %}
+                        <div class="finding-item">
+                            <i class="fas fa-file-code"></i> {{ js_file }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-file-exclamation"></i>
+                    No JavaScript files found
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h3 class="section-title"><i class="fas fa-search-plus"></i> JavaScript Analysis</h3>
+            {% if results.js_analysis %}
+                {% for analysis in results.js_analysis %}
+                    <div class="finding-card">
+                        <div class="finding-header">
+                            <div class="finding-title">
+                                <i class="fas fa-file-code"></i> {{ analysis.url }}
+                            </div>
+                        </div>
+                        
+                        {% if analysis.subdomains %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-sitemap"></i> Subdomains
+                                </div>
+                                <div class="finding-count">{{ analysis.subdomains|length }}</div>
+                            </div>
+                            {% for subdomain in analysis.subdomains %}
+                                <div class="finding-item">
+                                    <i class="fas fa-link"></i> {{ subdomain }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.endpoints %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-route"></i> Endpoints
+                                </div>
+                                <div class="finding-count">{{ analysis.endpoints|length }}</div>
+                            </div>
+                            {% for endpoint in analysis.endpoints %}
+                                <div class="finding-item">
+                                    <i class="fas fa-arrow-right"></i> {{ endpoint }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.api_keys %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-key"></i> Potential API Keys
+                                </div>
+                                <div class="finding-count">{{ analysis.api_keys|length }}</div>
+                            </div>
+                            {% for key in analysis.api_keys %}
+                                <div class="finding-item">
+                                    <i class="fas fa-lock"></i> {{ key }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.sensitive_paths %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-exclamation-triangle"></i> Sensitive Paths
+                                </div>
+                                <div class="finding-count">{{ analysis.sensitive_paths|length }}</div>
+                            </div>
+                            {% for path in analysis.sensitive_paths %}
+                                <div class="finding-item">
+                                    <i class="fas fa-folder-open"></i> {{ path }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.interesting_comments %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-comment-alt"></i> Interesting Comments
+                                </div>
+                                <div class="finding-count">{{ analysis.interesting_comments|length }}</div>
+                            </div>
+                            {% for comment in analysis.interesting_comments %}
+                                <div class="finding-item">
+                                    <i class="fas fa-quote-left"></i> {{ comment }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.dangerous_functions %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-radiation"></i> Dangerous Functions
+                                </div>
+                                <div class="finding-count">{{ analysis.dangerous_functions|length }}</div>
+                            </div>
+                            {% for func in analysis.dangerous_functions %}
+                                <div class="finding-item">
+                                    <i class="fas fa-exclamation-circle"></i> {{ func }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.dom_xss_sinks %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-code"></i> DOM XSS Sinks
+                                </div>
+                                <div class="finding-count">{{ analysis.dom_xss_sinks|length }}</div>
+                            </div>
+                            {% for sink in analysis.dom_xss_sinks %}
+                                <div class="finding-item">
+                                    <i class="fas fa-bug"></i> {{ sink }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.jwt_tokens %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-user-shield"></i> JWT Tokens
+                                </div>
+                                <div class="finding-count">{{ analysis.jwt_tokens|length }}</div>
+                            </div>
+                            {% for token in analysis.jwt_tokens %}
+                                <div class="finding-item">
+                                    <i class="fas fa-id-card"></i> {{ token }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.debug_flags %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-bug"></i> Debug Flags
+                                </div>
+                                <div class="finding-count">{{ analysis.debug_flags|length }}</div>
+                            </div>
+                            {% for flag in analysis.debug_flags %}
+                                <div class="finding-item">
+                                    <i class="fas fa-toggle-on"></i> {{ flag }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.version_info %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-info-circle"></i> Version Information
+                                </div>
+                                <div class="finding-count">{{ analysis.version_info|length }}</div>
+                            </div>
+                            {% for version in analysis.version_info %}
+                                <div class="finding-item">
+                                    <i class="fas fa-tag"></i> {{ version }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.hardcoded_credentials %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-user-secret"></i> Hardcoded Credentials
+                                </div>
+                                <div class="finding-count">{{ analysis.hardcoded_credentials|length }}</div>
+                            </div>
+                            {% for cred in analysis.hardcoded_credentials %}
+                                <div class="finding-item">
+                                    <i class="fas fa-key"></i> {{ cred }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.crypto_issues %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-lock-open"></i> Cryptographic Issues
+                                </div>
+                                <div class="finding-count">{{ analysis.crypto_issues|length }}</div>
+                            </div>
+                            {% for issue in analysis.crypto_issues %}
+                                <div class="finding-item">
+                                    <i class="fas fa-shield-alt"></i> {{ issue }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.config_issues %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-cog"></i> Configuration Issues
+                                </div>
+                                <div class="finding-count">{{ analysis.config_issues|length }}</div>
+                            </div>
+                            {% for issue in analysis.config_issues %}
+                                <div class="finding-item">
+                                    <i class="fas fa-wrench"></i> {{ issue }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.ssrf_patterns %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-network-wired"></i> SSRF Patterns
+                                </div>
+                                <div class="finding-count">{{ analysis.ssrf_patterns|length }}</div>
+                            </div>
+                            {% for pattern in analysis.ssrf_patterns %}
+                                <div class="finding-item">
+                                    <i class="fas fa-server"></i> {{ pattern }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.prototype_pollution %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-pollution"></i> Prototype Pollution
+                                </div>
+                                <div class="finding-count">{{ analysis.prototype_pollution|length }}</div>
+                            </div>
+                            {% for pattern in analysis.prototype_pollution %}
+                                <div class="finding-item">
+                                    <i class="fas fa-object-group"></i> {{ pattern }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.deserialization %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-archive"></i> Deserialization Issues
+                                </div>
+                                <div class="finding-count">{{ analysis.deserialization|length }}</div>
+                            </div>
+                            {% for issue in analysis.deserialization %}
+                                <div class="finding-item">
+                                    <i class="fas fa-box-open"></i> {{ issue }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.log_injection %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-file-signature"></i> Log Injection
+                                </div>
+                                <div class="finding-count">{{ analysis.log_injection|length }}</div>
+                            </div>
+                            {% for issue in analysis.log_injection %}
+                                <div class="finding-item">
+                                    <i class="fas fa-file-alt"></i> {{ issue }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.regex_dos %}
+                        <div class="finding">
+                            <div class="finding-header">
+                                <div class="finding-title">
+                                    <i class="fas fa-stopwatch"></i> Regex DoS Patterns
+                                </div>
+                                <div class="finding-count">{{ analysis.regex_dos|length }}</div>
+                            </div>
+                            {% for pattern in analysis.regex_dos %}
+                                <div class="finding-item">
+                                    <i class="fas fa-regex"></i> {{ pattern }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-file-exclamation"></i>
+                    No JavaScript files analyzed or no findings
+                </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <footer id="footer">
+        <div class="footer-content">
+            <div class="copyright">© 2025 ShadowScan</div>
+            <a href="https://t.me/dem0nicS0ul" class="telegram-link" target="_blank">
+                <i class="fab fa-telegram"></i> @dem0nicS0ul
+            </a>
+        </div>
+    </footer>
+    <script>
+        function initBackground() {
+            const container = document.getElementById('bgAnimation');
+            if (!container) return;
+
+            container.innerHTML = '';
+            
+            const particleCount = 15;
+            const colors = [
+                'rgba(255, 51, 51, 0.2)',
+                'rgba(255, 80, 80, 0.15)',
+                'rgba(200, 40, 40, 0.1)'
+            ];
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'bg-particle';
+                
+                const size = Math.random() * 300 + 150;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                
+                const startX = Math.random() * 100;
+                const startY = Math.random() * 100;
+                particle.style.left = `${startX}%`;
+                particle.style.top = `${startY}%`;
+                
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.background = `radial-gradient(circle, ${color} 0%, rgba(0,0,0,0) 70%)`;
+                
+                const duration = Math.random() * 40 + 20;
+                const delay = Math.random() * -duration;
+                
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 50 + Math.random() * 100;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+                
+                particle.style.setProperty('--tx', `${tx}%`);
+                particle.style.setProperty('--ty', `${ty}%`);
+                particle.style.animation = `float ${duration}s ${delay}s infinite`;
+                
+                container.appendChild(particle);
+            }
+        }
+
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            document.getElementById('scanOverlay').classList.add('active');
+            document.getElementById('mainContainer').classList.add('hidden');
+            document.getElementById('footer').classList.add('hidden');
+        });
+
+        if (document.querySelector('.stats-grid')) {
+            document.getElementById('scanOverlay').classList.remove('active');
+        }
+
+        if (document.readyState === 'complete') {
+            initBackground();
+        } else {
+            window.addEventListener('load', initBackground);
+        }
+
+        document.addEventListener('DOMContentLoaded', initBackground);        
+    </script>
+</body>
+</html>
