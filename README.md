@@ -25,3 +25,8 @@ Advanced web reconnaissance tool for domain analysis, subdomain discovery, and J
 cd shadowscan
 pip install -r requirements.txt
 python app.py
+```
+
+## Images
+
+![Снимок](https://github.com/user-attachments/assets/632aaaa4-154c-4171-a246-d03fb6e173d3)
