@@ -10,4 +10,4 @@ requests==2.31.0
 tldextract==5.1.1
 urllib3==2.1.0
 concurrent-log-handler==0.9.24
-lxml==5.1.0
+lxml
